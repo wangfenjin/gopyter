@@ -5,7 +5,7 @@
 
 `gopyter` is a Go+ kernel for [Jupyter](http://jupyter.org/) notebooks and [nteract](https://nteract.io/).  It lets you use Go+ interactively in a browser-based notebook or desktop app.  Use `gopyter` to create and share documents that contain live Go+ code, equations, visualizations and explanatory text.  These notebooks, with the live Go+ code, can then be shared with others via email, Dropbox, GitHub and the [Jupyter Notebook Viewer](http://nbviewer.jupyter.org/). Go forth and do data science, or anything else interesting, with Go+ notebooks!
 
-**Acknowledgements** - This project is forked from [gophernotes](https://github.com/wangfenjin/gophernotes) and change the internal interpreter to [Go+](https://github.com/goplus/gop).
+**Acknowledgements** - This project is forked from [gophernotes](https://github.com/gopherdata/gophernotes) and change the internal interpreter to [Go+](https://github.com/goplus/gop).
 
 - [Examples](#examples)
 - Install gopyter:
@@ -20,14 +20,6 @@
 - [Troubleshooting](#troubleshooting)
 
 ## Examples
-
-### Jupyter Notebook:
-
-![](files/jupyter.gif)
-
-### nteract:
-
-![](files/nteract.gif)
 
 ### Example Notebooks (download and run them locally, follow the links to view in Github, or use the [Jupyter Notebook Viewer](http://nbviewer.jupyter.org/)):
 - [Tutorial](examples/Tutorial.ipynb)

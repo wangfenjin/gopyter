@@ -112,6 +112,7 @@ func (kernel *Kernel) initRenderers() {
 // convert it to Data and return it.
 // otherwise return MakeData("text/plain", fmt.Sprint(vals...))
 func (kernel *Kernel) autoRenderResults(vals []interface{}, types []xreflect.Type) Data {
+	return MakeData(MIMETypeText, fmt.Sprint(vals...))
 	var nilcount int
 	var obj interface{}
 	var typ xreflect.Type

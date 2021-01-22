@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-zeromq/zmq4"
 	"golang.org/x/xerrors"
 
 	"github.com/cosmos72/gomacro/ast2"
@@ -24,9 +23,14 @@ import (
 	basereflect "github.com/cosmos72/gomacro/base/reflect"
 	interp "github.com/cosmos72/gomacro/fast"
 	"github.com/cosmos72/gomacro/xreflect"
+	"github.com/go-zeromq/zmq4"
+	"github.com/goplus/gop/repl"
 
 	// compile and link files generated in imports/
 	_ "github.com/gopherdata/gophernotes/imports"
+
+	// gop lib
+	_ "github.com/goplus/gop/lib"
 )
 
 // ExecCounter is incremented each time we run user code in the notebook.
@@ -114,10 +118,13 @@ type Kernel struct {
 	// map name -> HTMLer, JSONer, Renderer...
 	// used to convert interpreted types to one of these interfaces
 	render map[string]xreflect.Type
+
+	rr *repl.REPL
 }
 
 // runKernel is the main entry point to start the kernel.
 func runKernel(connectionFile string) {
+	rr := repl.New()
 
 	// Create a new interpreter for evaluating notebook code.
 	ir := interp.New()
@@ -196,6 +203,7 @@ func runKernel(connectionFile string) {
 		ir,
 		display,
 		nil,
+		rr,
 	}
 	kernel.initRenderers()
 
@@ -428,7 +436,7 @@ func (kernel *Kernel) handleExecuteRequest(receipt msgReceipt) error {
 	}()
 
 	// eval
-	vals, types, executionErr := doEval(ir, outerr, code)
+	vals, types, executionErr := doEvalGop(ir, kernel.rr, outerr, code)
 
 	// Close and restore the streams.
 	wOut.Close()
@@ -466,6 +474,40 @@ func (kernel *Kernel) handleExecuteRequest(receipt msgReceipt) error {
 
 	// Send the output back to the notebook.
 	return receipt.Reply("execute_reply", content)
+}
+
+// LinerUI implements repl.UI interface.
+type LinerUI struct {
+	result []interface{}
+}
+
+// SetPrompt is required by repl.UI interface.
+func (u *LinerUI) SetPrompt(prompt string) {
+	// do nothiner
+}
+
+// Printf is required by repl.UI interface.
+func (u *LinerUI) Printf(format string, a ...interface{}) {
+	u.result = a
+}
+
+func doEvalGop(ir *interp.Interp, rr *repl.REPL, outerr OutErr, code string) (val []interface{}, typ []xreflect.Type, err error) {
+	// Capture a panic from the evaluation if one occurs and store it in the `err` return parameter.
+	defer func() {
+		if r := recover(); r != nil {
+			var ok bool
+			if err, ok = r.(error); !ok {
+				err = errors.New(fmt.Sprint(r))
+			}
+		}
+	}()
+
+	code = evalSpecialCommands(ir, outerr, code)
+
+	ui := &LinerUI{}
+	rr.SetUI(ui)
+	rr.Run(code)
+	return ui.result, nil, nil
 }
 
 // doEval evaluates the code in the interpreter. This function captures an uncaught panic

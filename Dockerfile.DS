@@ -1,10 +1,10 @@
 FROM alpine:3.5
 MAINTAINER dwhitena
 
-# Add gophernotes
-ADD . /go/src/github.com/gopherdata/gophernotes/
+# Add gopyter
+ADD . /go/src/github.com/wangfenjin/gopyter/
 
-# Install Jupyter and gophernotes.
+# Install Jupyter and gopyter.
 RUN set -x \
     # install python and dependencies
     && apk update \
@@ -34,35 +34,15 @@ RUN set -x \
     ### fix pyzmq to v16.0.2 as that is what is distributed with py3-zmq
     ### pin down the tornado and ipykernel to compatible versions
     && pip3 install jupyter notebook pyzmq==16.0.2 tornado==4.5.3 ipykernel==4.8.1 \
-    ## install gophernotes
-    && cd /go/src/github.com/gopherdata/gophernotes \
+    ## install gopyter
+    && cd /go/src/github.com/wangfenjin/gopyter \
     && export GOPATH=/go \
     && export GO111MODULE=on \
     && go install . \
-    && cp /go/bin/gophernotes /usr/local/bin/ \
-    && mkdir -p ~/.local/share/jupyter/kernels/gophernotes \
-    && cp -r ./kernel/* ~/.local/share/jupyter/kernels/gophernotes \
+    && cp /go/bin/gopyter /usr/local/bin/ \
+    && mkdir -p ~/.local/share/jupyter/kernels/gopyter \
+    && cp -r ./kernel/* ~/.local/share/jupyter/kernels/gopyter \
     && cd - \
-    ## get the relevant Go packages
-    && go get -insecure gonum.org/v1/plot/... \
-    && go get -insecure gonum.org/v1/gonum/... \
-    && go get github.com/kniren/gota/... \
-    && go get github.com/sajari/regression \
-    && go get github.com/sjwhitworth/golearn/... \
-    && go get -insecure go-hep.org/x/hep/csvutil/... \
-    && go get -insecure go-hep.org/x/hep/fit \
-    && go get -insecure go-hep.org/x/hep/hbook \
-    && go get github.com/montanaflynn/stats \
-    && go get github.com/boltdb/bolt \
-    && go get github.com/patrickmn/go-cache \
-    && go get github.com/chewxy/math32 \
-    && go get github.com/chewxy/hm \
-    && go get gorgonia.org/vecf64 \
-    && go get gorgonia.org/vecf32 \
-    && go get github.com/awalterschulze/gographviz \
-    && go get github.com/leesper/go_rng \
-    && go get github.com/pkg/errors \
-    && go get github.com/stretchr/testify/assert \
     ## clean
     && find /usr/lib/python3.6 -name __pycache__ | xargs rm -r \
     && rm -rf \

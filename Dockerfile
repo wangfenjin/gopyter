@@ -1,10 +1,10 @@
 FROM alpine:3.5
 MAINTAINER dwhitena
 
-# Add gophernotes
-ADD . /go/src/github.com/gopherdata/gophernotes/
+# Add goputer
+ADD . /go/src/github.com/wangfenjin/gopyter/
 
-# Install Jupyter and gophernotes.
+# Install Jupyter and gopyter.
 RUN set -x \
     # install python and dependencies
     && apk update \
@@ -33,12 +33,12 @@ RUN set -x \
     ### fix pyzmq to v16.0.2 as that is what is distributed with py3-zmq
     ### pin down the tornado and ipykernel to compatible versions
     && pip3 install jupyter notebook pyzmq==16.0.2 tornado==4.5.3 ipykernel==4.8.1 \
-    ## install gophernotes
-    && cd /go/src/github.com/gopherdata/gophernotes \
+    ## install gopyter
+    && cd /go/src/github.com/wangfenjin/gopyter/ \
     && GOPATH=/go GO111MODULE=on go install . \
-    && cp /go/bin/gophernotes /usr/local/bin/ \
-    && mkdir -p ~/.local/share/jupyter/kernels/gophernotes \
-    && cp -r ./kernel/* ~/.local/share/jupyter/kernels/gophernotes \
+    && cp /go/bin/gopyter /usr/local/bin/ \
+    && mkdir -p ~/.local/share/jupyter/kernels/gopyter \
+    && cp -r ./kernel/* ~/.local/share/jupyter/kernels/gopyter \
     && cd - \
     ## clean
     && find /usr/lib/python3.6 -name __pycache__ | xargs rm -r \

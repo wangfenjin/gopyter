@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/ast"
 	"io"
 	"io/ioutil"
 	"log"
@@ -16,18 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/xerrors"
-
-	"github.com/cosmos72/gomacro/ast2"
-	"github.com/cosmos72/gomacro/base"
-	basereflect "github.com/cosmos72/gomacro/base/reflect"
-	interp "github.com/cosmos72/gomacro/fast"
-	"github.com/cosmos72/gomacro/xreflect"
 	"github.com/go-zeromq/zmq4"
 	"github.com/goplus/gop/repl"
-
-	// compile and link files generated in imports/
-	_ "github.com/gopherdata/gophernotes/imports"
+	"golang.org/x/xerrors"
 
 	// gop lib
 	_ "github.com/goplus/gop/lib"
@@ -113,37 +103,12 @@ func (s *Socket) RunWithSocket(run func(socket zmq4.Socket) error) error {
 }
 
 type Kernel struct {
-	ir      *interp.Interp
-	display *interp.Import
-	// map name -> HTMLer, JSONer, Renderer...
-	// used to convert interpreted types to one of these interfaces
-	render map[string]xreflect.Type
-
 	rr *repl.REPL
 }
 
 // runKernel is the main entry point to start the kernel.
 func runKernel(connectionFile string) {
 	rr := repl.New()
-
-	// Create a new interpreter for evaluating notebook code.
-	ir := interp.New()
-
-	// Throw out the error/warning messages that gomacro outputs writes to these streams.
-	ir.Comp.Stdout = ioutil.Discard
-	ir.Comp.Stderr = ioutil.Discard
-
-	// Inject the "display" package to render HTML, JSON, PNG, JPEG, SVG... from interpreted code
-	// maybe a dot-import is easier to use?
-	display, err := ir.Comp.ImportPackageOrError("display", "display")
-	if err != nil {
-		log.Print(err)
-	}
-
-	// Inject the stub "Display" function. declare a variable
-	// instead of a function, because we want to later change
-	// its value to the closure that holds a reference to msgReceipt
-	ir.DeclVar("Display", nil, stubDisplay)
 
 	// Parse the connection info.
 	var connInfo ConnectionInfo
@@ -199,13 +164,7 @@ func runKernel(connectionFile string) {
 	go poll(stdin, sockets.StdinSocket.Socket)
 	go poll(ctl, sockets.ControlSocket.Socket)
 
-	kernel := Kernel{
-		ir,
-		display,
-		nil,
-		rr,
-	}
-	kernel.initRenderers()
+	kernel := Kernel{rr}
 
 	// Start a message receiving loop.
 	for {
@@ -327,15 +286,13 @@ func (kernel *Kernel) handleShellMsg(receipt msgReceipt) {
 		}
 	}()
 
-	ir := kernel.ir
-
 	switch receipt.Msg.Header.MsgType {
 	case "kernel_info_request":
 		if err := sendKernelInfo(receipt); err != nil {
 			log.Fatal(err)
 		}
 	case "complete_request":
-		if err := handleCompleteRequest(ir, receipt); err != nil {
+		if err := handleCompleteRequest(receipt); err != nil {
 			log.Fatal(err)
 		}
 	case "execute_request":
@@ -354,17 +311,17 @@ func sendKernelInfo(receipt msgReceipt) error {
 	return receipt.Reply("kernel_info_reply",
 		kernelInfo{
 			ProtocolVersion:       ProtocolVersion,
-			Implementation:        "gophernotes",
+			Implementation:        "gopyter",
 			ImplementationVersion: Version,
-			Banner:                fmt.Sprintf("Go kernel: gophernotes - v%s", Version),
+			Banner:                fmt.Sprintf("Go kernel: gopyter - v%s", Version),
 			LanguageInfo: kernelLanguageInfo{
-				Name:          "go",
+				Name:          "go+",
 				Version:       runtime.Version(),
 				FileExtension: ".go",
 			},
 			HelpLinks: []helpLink{
-				{Text: "Go", URL: "https://golang.org/"},
-				{Text: "gophernotes", URL: "https://github.com/gopherdata/gophernotes"},
+				{Text: "Go+", URL: "https://goplus.org/"},
+				{Text: "gopyter", URL: "https://github.com/wangfenjin/gopyter"},
 			},
 		},
 	)
@@ -426,17 +383,8 @@ func (kernel *Kernel) handleExecuteRequest(receipt msgReceipt) error {
 		io.Copy(&jupyterStdErr, rErr)
 	}()
 
-	// inject the actual "Display" closure that displays multimedia data in Jupyter
-	ir := kernel.ir
-	displayPlace := ir.ValueOf("Display")
-	displayPlace.Set(xreflect.ValueOf(receipt.PublishDisplayData))
-	defer func() {
-		// remove the closure before returning
-		displayPlace.Set(xreflect.ValueOf(stubDisplay))
-	}()
-
 	// eval
-	vals, types, executionErr := doEvalGop(ir, kernel.rr, outerr, code)
+	vals, executionErr := doEvalGop(kernel.rr, outerr, code)
 
 	// Close and restore the streams.
 	wOut.Close()
@@ -450,7 +398,7 @@ func (kernel *Kernel) handleExecuteRequest(receipt msgReceipt) error {
 
 	if executionErr == nil {
 		// if the only non-nil value should be auto-rendered graphically, render it
-		data := kernel.autoRenderResults(vals, types)
+		data := kernel.autoRenderResults(vals)
 
 		content["status"] = "ok"
 		content["user_expressions"] = make(map[string]string)
@@ -491,7 +439,7 @@ func (u *LinerUI) Printf(format string, a ...interface{}) {
 	u.result = a
 }
 
-func doEvalGop(ir *interp.Interp, rr *repl.REPL, outerr OutErr, code string) (val []interface{}, typ []xreflect.Type, err error) {
+func doEvalGop(rr *repl.REPL, outerr OutErr, code string) (val []interface{}, err error) {
 	// Capture a panic from the evaluation if one occurs and store it in the `err` return parameter.
 	defer func() {
 		if r := recover(); r != nil {
@@ -502,92 +450,12 @@ func doEvalGop(ir *interp.Interp, rr *repl.REPL, outerr OutErr, code string) (va
 		}
 	}()
 
-	code = evalSpecialCommands(ir, outerr, code)
+	code = evalSpecialCommands(outerr, code)
 
 	ui := &LinerUI{}
 	rr.SetUI(ui)
 	rr.Run(code)
-	return ui.result, nil, nil
-}
-
-// doEval evaluates the code in the interpreter. This function captures an uncaught panic
-// as well as the values of the last statement/expression.
-func doEval(ir *interp.Interp, outerr OutErr, code string) (val []interface{}, typ []xreflect.Type, err error) {
-
-	// Capture a panic from the evaluation if one occurs and store it in the `err` return parameter.
-	defer func() {
-		if r := recover(); r != nil {
-			var ok bool
-			if err, ok = r.(error); !ok {
-				err = errors.New(fmt.Sprint(r))
-			}
-		}
-	}()
-
-	code = evalSpecialCommands(ir, outerr, code)
-
-	// Prepare and perform the multiline evaluation.
-	compiler := ir.Comp
-
-	// Don't show the gomacro prompt.
-	compiler.Options &^= base.OptShowPrompt
-
-	// Don't swallow panics as they are recovered above and handled with a Jupyter `error` message instead.
-	compiler.Options &^= base.OptTrapPanic
-
-	// Reset the error line so that error messages correspond to the lines from the cell.
-	compiler.Line = 0
-
-	// Parse the input code (and don't perform gomacro's macroexpansion).
-	// These may panic but this will be recovered by the deferred recover() above so that the error
-	// may be returned instead.
-	nodes := compiler.ParseBytes([]byte(code))
-	srcAst := ast2.AnyToAst(nodes, "doEval")
-
-	// If there is no srcAst then we must be evaluating nothing. The result must be nil then.
-	if srcAst == nil {
-		return nil, nil, nil
-	}
-
-	// Check if the last node is an expression. If the last node is not an expression then nothing
-	// is returned as a value. For example evaluating a function declaration shouldn't return a value but
-	// just have the side effect of declaring the function.
-	//
-	// This is actually needed only for gomacro classic interpreter
-	// (the fast interpreter already returns values only for expressions)
-	// but retained for compatibility.
-	var srcEndsWithExpr bool
-	if len(nodes) > 0 {
-		_, srcEndsWithExpr = nodes[len(nodes)-1].(ast.Expr)
-	}
-
-	// Compile the ast.
-	compiledSrc := ir.CompileAst(srcAst)
-
-	// Evaluate the code.
-	results, types := ir.RunExpr(compiledSrc)
-
-	// If the source ends with an expression, then the result of the execution is the value of the expression. In the
-	// event that all return values are nil, the result is also nil.
-	if srcEndsWithExpr {
-
-		// Count the number of non-nil values in the output. If they are all nil then the output is skipped.
-		nonNilCount := 0
-		values := make([]interface{}, len(results))
-		for i, result := range results {
-			val := basereflect.ValueInterface(result)
-			if val != nil {
-				nonNilCount++
-			}
-			values[i] = val
-		}
-
-		if nonNilCount > 0 {
-			return values, types, nil
-		}
-	}
-
-	return nil, nil, nil
+	return ui.result, nil
 }
 
 // handleShutdownRequest sends a "shutdown" message.
@@ -670,18 +538,15 @@ func startHeartbeat(hbSocket Socket, wg *sync.WaitGroup) (shutdown chan struct{}
 }
 
 // find and execute special commands in code, remove them from returned string
-func evalSpecialCommands(ir *interp.Interp, outerr OutErr, code string) string {
+func evalSpecialCommands(outerr OutErr, code string) string {
 	lines := strings.Split(code, "\n")
 	stop := false
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
 		if len(line) != 0 {
 			switch line[0] {
-			case '%':
-				evalSpecialCommand(ir, outerr, line)
-				lines[i] = ""
 			case '$':
-				evalShellCommand(ir, outerr, line)
+				evalShellCommand(outerr, line)
 				lines[i] = ""
 			default:
 				// if a line is NOT a special command,
@@ -696,43 +561,8 @@ func evalSpecialCommands(ir *interp.Interp, outerr OutErr, code string) string {
 	return strings.Join(lines, "\n")
 }
 
-// execute special command. line must start with '%'
-func evalSpecialCommand(ir *interp.Interp, outerr OutErr, line string) {
-	const help string = `
-available special commands (%):
-%help
-%go111module {on|off}
-
-execute shell commands ($): $command [args...]
-example:
-$ls -l
-`
-
-	args := strings.SplitN(line, " ", 2)
-	cmd := args[0]
-	arg := ""
-	if len(args) > 1 {
-		arg = args[1]
-	}
-	switch cmd {
-
-	case "%go111module":
-		if arg == "on" {
-			ir.Comp.CompGlobals.Options |= base.OptModuleImport
-		} else if arg == "off" {
-			ir.Comp.CompGlobals.Options &^= base.OptModuleImport
-		} else {
-			panic(fmt.Errorf("special command %s: expecting a single argument 'on' or 'off', found: %q", cmd, arg))
-		}
-	case "%help":
-		fmt.Fprint(outerr.out, help)
-	default:
-		panic(fmt.Errorf("unknown special command: %q\n%s", line, help))
-	}
-}
-
 // execute shell command. line must start with '$'
-func evalShellCommand(ir *interp.Interp, outerr OutErr, line string) {
+func evalShellCommand(outerr OutErr, line string) {
 	args := strings.Fields(line[1:])
 	if len(args) <= 0 {
 		return

@@ -1,9 +1,9 @@
 {
     "argv": [
-        "gophernotes",
+        "gopyter",
         "{connection_file}"
     ],
-    "display_name": "Go",
-    "language": "go",
-    "name": "go"
+    "display_name": "GoPlus
+    "language": "go+",
+    "name": "go+"
 }

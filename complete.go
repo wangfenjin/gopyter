@@ -1,8 +1,6 @@
 package main
 
-import (
-	interp "github.com/cosmos72/gomacro/fast"
-)
+import "fmt"
 
 type Completion struct {
 	class,
@@ -18,14 +16,16 @@ type CompletionResponse struct {
 /************************************************************
 * entry function
 ************************************************************/
-func handleCompleteRequest(ir *interp.Interp, receipt msgReceipt) error {
+func handleCompleteRequest(receipt msgReceipt) error {
+	return nil
 	// Extract the data from the request.
 	reqcontent := receipt.Msg.Content.(map[string]interface{})
 	code := reqcontent["code"].(string)
+	fmt.Println(code)
 	cursorPos := int(reqcontent["cursor_pos"].(float64))
 
 	// autocomplete the code at the cursor position
-	prefix, matches, _ := ir.CompleteWords(code, cursorPos)
+	matches := ""
 
 	// prepare the reply
 	content := make(map[string]interface{})
@@ -36,8 +36,8 @@ func handleCompleteRequest(ir *interp.Interp, receipt msgReceipt) error {
 		content["traceback"] = nil
 		content["status"] = "error"
 	} else {
-		partialWord := interp.TailIdentifier(prefix)
-		content["cursor_start"] = float64(len(prefix) - len(partialWord))
+		partialWord := ""
+		content["cursor_start"] = float64(0 - len(partialWord))
 		content["cursor_end"] = float64(cursorPos)
 		content["matches"] = matches
 		content["status"] = "ok"

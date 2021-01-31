@@ -1,4 +1,4 @@
-[Build Status](https://github.com/wangfenjin/gopyter/workflows/Go/badge.svg)
+![Build Status](https://github.com/wangfenjin/gopyter/workflows/Go/badge.svg)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/wangfenjin/gopyter/blob/master/LICENSE)
 
 # gopyter - Use Go+ in Jupyter notebooks and nteract

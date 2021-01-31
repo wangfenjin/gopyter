@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/wangfenjin/gopyter.svg?branch=master)](https://travis-ci.org/wangfenjin/gopyter)
+[![Build Status](https://github.com/wangfenjin/gopyter/workflows/Go/badge.svg)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/wangfenjin/gopyter/blob/master/LICENSE)
 
 # gopyter - Use Go+ in Jupyter notebooks and nteract
@@ -179,7 +179,7 @@ $ docker run -it -p 8888:8888 -v /path/to/local/notebooks:/path/to/notebooks/in/
 
 - Launch nteract.
 
-- From the nteract menu select Language -> Go.
+- From the nteract menu select Language -> Go+.
 
 - Have fun!
 

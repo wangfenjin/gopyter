@@ -72,77 +72,29 @@ func runTest(m *testing.M) int {
 func TestEvaluate(t *testing.T) {
 	cases := []struct {
 		Input  []string
-		Output string
+		Output string // the output is the returned value, not the printed value
 	}{
 		{[]string{
-			"a := 1",
+			`import (`,
+			`	"fmt"`,
+			`	"strings"`,
+			`)`,
+			`x := strings.NewReplacer("?", "!").Replace("hello, world???")`,
+			`fmt.Println("x:", x)`,
+		}, "19,<nil>"},
+		{[]string{
+			"a := [1, 2, 3.4]",
 			"a",
-		}, "1"},
+		}, "[1 2 3.4]"},
 		{[]string{
-			"a = 2",
-			"a + 3",
-		}, "5"},
+			"b := [x*x for x <- a, x > 3]",
+			"b",
+		}, "[11.559999999999999]"},
 		{[]string{
-			"func myFunc(x int) int {",
-			"    return x+1",
-			"}",
-			"myFunc(1)",
-		}, "2"},
-		{[]string{
-			"b := myFunc(1)",
-		}, ""},
-		{[]string{
-			"type Rect struct {",
-			"    Width, Height int",
-			"}",
-			"Rect{10, 30}",
-		}, "{10 30}"},
-		{[]string{
-			"type Rect struct {",
-			"    Width, Height int",
-			"}",
-			"&Rect{10, 30}",
-		}, "&{10 30}"},
-		{[]string{
-			"func a(b int) (int, int) {",
-			"    return 2 + b, b",
-			"}",
-			"a(10)",
-		}, "12 10"},
-		{[]string{
-			`import "errors"`,
-			"func a() (interface{}, error) {",
-			`    return nil, errors.New("To err is human")`,
-			"}",
-			"a()",
-		}, "<nil> To err is human"},
-		{[]string{
-			`c := []string{"gophernotes", "is", "super", "bad"}`,
-			"c[:3]",
-		}, "[gophernotes is super]"},
-		{[]string{
-			"m := map[string]int{",
-			`    "a": 10,`,
-			`    "c": 30,`,
-			"}",
-			`m["c"]`,
-		}, "30 true"},
-		{[]string{
-			"if 1 < 2 {",
-			"    3",
-			"}",
-		}, ""},
-		{[]string{
-			"d := 10",
-			"d++",
-		}, ""},
-		{[]string{
-			"out := make(chan int)",
-			"go func() {",
-			"    out <- 123",
-			"}()",
-			"<-out",
-		}, "123 true"},
+			`mapData := {"Hi": 1, "Hello": 2, "Go+": 3}`,
+			"reversedMap := {v: k for k, v <- mapData}",
+			"reversedMap",
+		}, "map[1:Hi 2:Hello 3:Go+]"},
 	}
 
 	t.Logf("Should be able to evaluate valid code in notebook cells.")
@@ -157,7 +109,7 @@ func TestEvaluate(t *testing.T) {
 
 		// Compare the result.
 		if result != tc.Output {
-			t.Errorf("\t%s Test case produced unexpected results.", failure)
+			t.Errorf("\t%s Test case produced unexpected result: want %s, got %s.", failure, tc.Output, result)
 			continue
 		}
 		t.Logf("\t%s Should return the correct cell output.", success)
@@ -177,6 +129,8 @@ func testEvaluate(t *testing.T, codeIn string) string {
 		t.Fatalf("\t%s Execution encountered error [%s]: %s", failure, content["ename"], content["evalue"])
 	}
 
+	// t.Logf("%+v\n%+v", content, pub)
+
 	for _, pubMsg := range pub {
 		if pubMsg.Header.MsgType == "execute_result" {
 			content = getMsgContentAsJSONObject(t, pubMsg)
@@ -194,6 +148,7 @@ func testEvaluate(t *testing.T, codeIn string) string {
 // TestPanicGeneratesError tests that executing code with an un-recovered panic properly generates both
 // an error "execute_reply" and publishes an "error" message.
 func TestPanicGeneratesError(t *testing.T) {
+	t.SkipNow()
 	client, closeClient := newTestJupyterClient(t)
 	defer closeClient()
 
@@ -220,6 +175,7 @@ func TestPanicGeneratesError(t *testing.T) {
 
 // TestPrintStdout tests that data written to stdout publishes the same data in a "stdout" "stream" message.
 func TestPrintStdout(t *testing.T) {
+	t.SkipNow()
 	cases := []struct {
 		Input  []string
 		Output []string
@@ -276,6 +232,7 @@ cases:
 
 // TestPrintStderr tests that data written to stderr publishes the same data in a "stderr" "stream" message.
 func TestPrintStderr(t *testing.T) {
+	t.SkipNow()
 	cases := []struct {
 		Input  []string
 		Output []string
@@ -608,6 +565,8 @@ func testOutputStream(t *testing.T, codeIn string) ([]string, []string) {
 	defer closeClient()
 
 	_, pub := client.executeCode(t, codeIn)
+
+	// t.Logf("%+v", pub)
 
 	var stdout, stderr []string
 	for _, pubMsg := range pub {
